@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true" # This is needed to avoid a warning about Node 20 being deprecated in Github Actions. It has no effect on our Python code.
 
     steps:
     - name: Check out the repository
