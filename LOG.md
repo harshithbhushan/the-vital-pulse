@@ -22,6 +22,7 @@
   - *Diagnosis:* Monospaced terminal fonts require fixed character widths; differing integer lengths cause the entire trailing string to shift horizontally.
   - *Fix:* Implemented Python f-string fixed-width padding (`{bpm:>3}` and `{spo2:>3}`) to force all integers to occupy exactly 3 spaces, right-aligned, locking the data into a readable vertical column.
 
+
 ## Day 2: CI/CD Quality Gate & PySpark Anomaly Logic Validation
 - **Goal:** Establish an automated CI/CD pipeline for code validation and engineer the distributed PySpark logic for real-time anomaly detection.
 - **Outcome:** Successfully implemented a GitHub Actions workflow with a Flake8 Quality Gate. Authored and validated the core PySpark parsing/filtering DataFrame logic, pivoting to containerized Linux deployment after isolating Windows OS Py4J socket limitations.
@@ -59,4 +60,30 @@
   - *Error:* `java.io.EOFException: Python worker exited unexpectedly (crashed).`
   - *Diagnosis:* With the JVM stabilized, the Python 3.12 worker crashed upon rendering the DataFrame (`showString`). This is a known threading/socket bug between Python 3.12 and Py4J operating strictly on Windows OS.
   - *Fix:* Validated the code logic via the stack trace (which proved successful execution up to the print statement) and aborted local Windows debugging in favor of Phase 2 containerized Linux deployment.
+
+
+## Day 3: Infrastructure-as-Code & Distributed Streaming (Minikube + Kafka)
+- **Goal:** Pivot from local Windows execution to a containerized, production-grade Linux environment to support distributed message brokering and stream processing.
+- **Outcome:** Successfully deployed a local Minikube cluster, provisioned a Redpanda (Kafka) broker, and connected an asynchronous Python producer to a native PySpark streaming consumer container.
+- **Actions:**
+    - Initialized a Minikube cluster using the Docker (WSL2) driver to bypass host OS limitations.
+    - Authored Kubernetes manifests (`Deployment`, `Service`, `Job`) to provision the Redpanda broker and the Spark consumer.
+    - Upgraded `stream_vitals.py` using `confluent_kafka` to asynchronously produce FHIR payloads to the broker, implementing a `delivery_report` callback to monitor network latency.
+    - Containerized the PySpark anomaly logic using a lightweight Python 3.11/Java 17 Docker image and deployed it directly into the Minikube registry.
+
+### 🏗️ Architectural Decisions & Key Concepts
+- **Redpanda over Apache Kafka:** Selected Redpanda for the local message broker to eliminate the JVM overhead and Zookeeper dependencies of native Kafka, ensuring stable operation within a local Minikube environment while maintaining 100% Kafka API compatibility.
+- **Declarative Infrastructure:** Opted for a `Deployment` over a basic `Pod` for Redpanda, ensuring Kubernetes actively monitors and respawns the broker if it crashes. Enforced strict hardware constraints (`--smp=1`, `--memory=1G`) via YAML args to prevent the broker from starving the Minikube node.
+- **Asynchronous Publishing & Zero Data Loss:** Configured the Python producer to push data without waiting for synchronous network ACKs, utilizing background polling (`producer.poll(0)`) to process delivery receipts and maximize throughput. Implemented a fatal termination trap (`producer.flush()`) to guarantee all buffered messages are successfully transmitted before the script exits.
+- **Deterministic Partitioning:** Enforced message ordering by publishing payloads with a specific key (`patient_id`), guaranteeing all telemetry for a given patient hashes to the exact same Kafka partition.
+
+### ⚠️ Technical Challenges & Troubleshooting
+- **Kubernetes API Versioning:**
+  - *Error:* `no matches for kind "Deployment" in version "api/v1"`
+  - *Diagnosis:* Attempted to deploy the Redpanda broker using the base `v1` API group.
+  - *Fix:* Corrected the manifest to utilize the `apps/v1` API group required for `Deployment` resources.
+- **The "Advertised Listener" Trap (Split-Brain DNS):**
+  - *Error:* `TimeoutException: Timed out waiting for a node assignment` within the Spark container.
+  - *Diagnosis:* The Redpanda broker defaulted to advertising `127.0.0.1` as its address. While this successfully routed traffic from the host Windows machine via port-forwarding, it caused the Spark container (running inside Minikube) to attempt to route traffic to its own internal localhost rather than the broker.
+  - *Fix:* Implemented a split-brain listener configuration (`--kafka-addr` and `--advertise-kafka-addr`). Configured an internal listener (`kafka-service:9092`) for intra-cluster Spark traffic, and an external listener (`localhost:29092`) for host-machine Python traffic.
   
