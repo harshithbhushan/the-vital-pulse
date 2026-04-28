@@ -1,0 +1,12 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: spark-anomaly-detector
+spec:
+  template:
+    spec:
+      containers:
+      - name: spark-consumer
+        image: vital-pulse-spark:latest
+        imagePullPolicy: Never # Forces Minikube to use our locally loaded image
+      restartPolicy: Never
