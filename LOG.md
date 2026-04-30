@@ -86,4 +86,33 @@
   - *Error:* `TimeoutException: Timed out waiting for a node assignment` within the Spark container.
   - *Diagnosis:* The Redpanda broker defaulted to advertising `127.0.0.1` as its address. While this successfully routed traffic from the host Windows machine via port-forwarding, it caused the Spark container (running inside Minikube) to attempt to route traffic to its own internal localhost rather than the broker.
   - *Fix:* Implemented a split-brain listener configuration (`--kafka-addr` and `--advertise-kafka-addr`). Configured an internal listener (`kafka-service:9092`) for intra-cluster Spark traffic, and an external listener (`localhost:29092`) for host-machine Python traffic.
-  
+
+
+## Day 4: The Storage Layer & Medallion Architecture (MinIO + Apache Iceberg)
+- **Goal:** Evolve the real-time stream into a durable Lakehouse by routing intercepted anomalies from the Kafka broker into S3-compatible object storage using an ACID-compliant table format.
+- **Outcome:** Successfully deployed a local MinIO object store natively in Kubernetes and upgraded the PySpark consumer to write micro-batches directly into an Apache Iceberg table.
+- **Actions:**
+    - Deployed MinIO natively via Kubernetes Infrastructure-as-Code after diagnosing a broken image manifest in the official Bitnami Helm chart.
+    - Configured port-forwarding to access the MinIO API (`9000`) and the Web Console (`9001`), manually provisioning the `vital-pulse-lakehouse` S3 bucket.
+    - Injected AWS S3 (`hadoop-aws`) and Iceberg (`iceberg-spark-runtime`) Maven packages into the Spark container.
+    - Authored PySpark SQL commands to dynamically provision a `lakehouse.medical.critical_vitals_v2` table.
+    - Updated the Spark Structured Streaming sink to output `.parquet` files governed by Iceberg metadata with a 5-second trigger.
+
+### 🏗️ Architectural Decisions & Key Concepts
+- **Lakehouse over Data Warehouse:** Selected Apache Iceberg on MinIO rather than a traditional relational database. This allows for massive, cheap storage of raw FHIR JSONs while maintaining ACID transactional guarantees and schema enforcement, setting up the "Silver/Gold" layer of the Medallion Architecture.
+- **Infrastructure-as-Code (IaC) vs. Package Managers:** Pivoted from Helm to raw Kubernetes manifests for the MinIO deployment to ensure absolute control over image tags and container configuration, avoiding upstream open-source registry failures.
+
+### ⚠️ Technical Challenges & Troubleshooting
+- **Helm Repository Image Deprecation:**
+  - *Error:* `manifest unknown` for Bitnami MinIO image during Helm install.
+  - *Diagnosis:* The upstream Helm chart referenced a deprecated or deleted Docker tag.
+  - *Fix:* Uninstalled the broken Helm release and authored a native `minio.yaml` Deployment and Service using the stable `minio/minio:latest` image.
+- **Spark Structured Streaming Partition Limitation:**
+  - *Error:* `days(event_time) is not currently supported`
+  - *Diagnosis:* While Apache Iceberg supports hidden partitioning (`days()`), PySpark's Structured Streaming V2 Data Source API currently lacks support for dynamic time transformations during micro-batch appends.
+  - *Fix:* Simplified the Iceberg schema to an unpartitioned table, which is perfectly performant for the local data volume.
+- **The Checkpoint Cache Trap:**
+  - *Error:* Spark continually crashed with the partition error even after the Python code was corrected and the Docker image rebuilt.
+  - *Diagnosis:* Spark reads its `checkpointLocation` in S3 *before* executing code to resume state. The broken partition rules from the first run were permanently cached in the MinIO checkpoint files.
+  - *Fix:* Executed the "Nuclear Option." Purged the corrupted MinIO directories and bumped the application versioning (`critical_vitals_v2` and Docker tag `v2`) to force the cluster to generate entirely fresh, untainted metadata and states.
+

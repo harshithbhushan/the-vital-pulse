@@ -7,6 +7,6 @@ spec:
     spec:
       containers:
       - name: spark-consumer
-        image: vital-pulse-spark:latest
+        image: vital-pulse-spark:v2
         imagePullPolicy: Never # Forces Minikube to use our locally loaded image
       restartPolicy: Never
