@@ -116,3 +116,29 @@
   - *Diagnosis:* Spark reads its `checkpointLocation` in S3 *before* executing code to resume state. The broken partition rules from the first run were permanently cached in the MinIO checkpoint files.
   - *Fix:* Executed the "Nuclear Option." Purged the corrupted MinIO directories and bumped the application versioning (`critical_vitals_v2` and Docker tag `v2`) to force the cluster to generate entirely fresh, untainted metadata and states.
 
+
+## Day 5: The AI Bridge (Vectorization & Qdrant)
+- **Goal:** Bridge the Medallion Architecture's storage layer with an AI retrieval system by translating tabular clinical anomalies into mathematical embeddings.
+- **Outcome:** Deployed a local Qdrant vector database via Kubernetes and authored a PySpark/Python worker script to embed 940 Iceberg records using the `all-MiniLM-L6-v2` model.
+- **Actions:**
+    - Authored a native Kubernetes `Deployment` and `Service` manifest (`infra/qdrant.yaml`) to provision a local Qdrant instance, establishing separation of concerns between declarative infrastructure and imperative processing logic.
+    - Built a Python vectorization worker utilizing `sentence-transformers` to encode synthesized clinical strings into 384-dimensional vectors.
+    - Extracted tabular records directly from the MinIO Iceberg Lakehouse using PySpark boilerplate configurations and packaged them as metadata payloads alongside their corresponding vectors in Qdrant.
+
+### 🏗️ Architectural Decisions & Key Concepts
+- **Rich Metadata Payloads:** Instead of only storing the vector embeddings, the original tabular data (`observation_id`, `metric_value`, `event_time`) was attached as the Qdrant payload. This prevents the downstream RAG application from having to execute a costly "join" back to the Iceberg table during real-time inference.
+- **Local Embedded Models vs. External APIs:** Selected HuggingFace's lightweight `all-MiniLM-L6-v2` over external APIs (like Gemini or OpenAI). While external APIs are powerful, utilizing a local model mirrors strict healthcare data governance (HIPAA) practices by ensuring clinical data never leaves the private network during the vectorization process.
+
+### ⚠️ Technical Challenges & Troubleshooting
+- **The "WinUtils" Hadoop Dependency Trap:**
+  - *Error:* `java.io.FileNotFoundException: HADOOP_HOME and hadoop.home.dir are unset.`
+  - *Diagnosis:* Running PySpark locally on Windows requires native Hadoop binaries for file permission management. Because Apache does not officially support Windows compilation, these binaries must be sourced externally.
+  - *Fix:* Procured compiled `winutils.exe` and `hadoop.dll` binaries from a trusted Apache contributor repository, and dynamically injected the `HADOOP_HOME` environment variable via `os.environ` to bypass IDE caching issues.
+- **PySpark vs. Iceberg Dependency Hell:**
+  - *Error:* `java.lang.NoSuchMethodError` and `ClassNotFoundException: scala.Serializable`
+  - *Diagnosis:* The pip package manager pulled the latest 4.x release of PySpark (compiled with Scala 2.13), which fatally conflicted with the explicitly declared `iceberg-spark-runtime-3.5_2.12` Maven package (compiled for Spark 3.5 / Scala 2.12).
+  - *Fix:* Explicitly pinned the Python dependency (`pyspark==3.5.1`) to perfectly mirror the JVM runtime environment, restoring system stability and demonstrating strict dependency management.
+
+
+
+
