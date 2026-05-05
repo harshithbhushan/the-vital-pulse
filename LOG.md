@@ -140,5 +140,27 @@
   - *Fix:* Explicitly pinned the Python dependency (`pyspark==3.5.1`) to perfectly mirror the JVM runtime environment, restoring system stability and demonstrating strict dependency management.
 
 
+## Day 6: The AI Serving Layer (FastAPI & RAG)
+- **Goal:** Expose the Medallion Architecture's Gold Layer (vectorized anomalies) to end-users via a robust REST API, enabling natural language querying of live clinical data.
+- **Outcome:** Engineered a FastAPI application implementing a Retrieval-Augmented Generation (RAG) pipeline, integrating local HuggingFace embeddings with Google's Gemini LLM.
+- **Actions:**
+    - Initialized a Uvicorn-backed FastAPI server with automated Swagger UI documentation for immediate endpoint testing.
+    - Upgraded and migrated the Google AI Python SDK from the deprecated `generativeai` package to the modern `google-genai` architecture, overcoming legacy versioning conflicts.
+    - Authored a `/ask` POST route that vectorizes incoming natural language queries, performs a cosine similarity search against the local Qdrant database, and extracts the contextual metadata.
+    - Engineered a strict "Open-Book" LLM prompt that forces the Gemini engine to ground its generated responses entirely in the retrieved Iceberg/Qdrant records, effectively eliminating clinical hallucinations.
+
+### 🏗️ Architectural Decisions & Key Concepts
+- **Separation of Compute (Hybrid AI):** Designed a hybrid inference model where the cheap, high-frequency task (embedding the user's question) is handled locally on the CPU via `sentence-transformers`, while the complex, compute-heavy task (natural language generation) is offloaded to the cloud via the Gemini API.
+- **Graceful Degradation:** The AI prompt was specifically designed with an escape hatch ("I don't have enough data to answer that"). When the vector payloads lacked explicit patient IDs, the system successfully degraded gracefully rather than hallucinating fake patient records, proving the reliability of the RAG pipeline.
+
+### ⚠️ Technical Challenges & Troubleshooting
+- **Breaking API Changes in Vendor SDKs:**
+  - *Error:* `QdrantClient object has no attribute 'search'` and `ImportError: cannot import name 'genai'`.
+  - *Diagnosis:* Encountered major breaking changes across two separate vendor libraries (Qdrant and Google) where old methods were deprecated or packages were entirely renamed, resulting in global namespace collisions in Python.
+  - *Fix:* Executed targeted `--force-reinstall` commands to rebuild the virtual environment's namespace, and refactored the legacy Qdrant syntax to the modern `.query_points()` API.
+- **Cloud Quota Exhaustion on Premium Models:**
+  - *Error:* `429 RESOURCE_EXHAUSTED` (Quota limit: 0).
+  - *Diagnosis:* Attempted to route the inference request to a premium preview model (`gemini-3.1-pro`), which holds a hard zero-limit quota on unbilled cloud accounts.
+  - *Fix:* Dynamically re-routed the LLM generation target to `gemini-2.5-flash`, capitalizing on the high-speed, free-tier developer limits while maintaining response quality.
 
 
