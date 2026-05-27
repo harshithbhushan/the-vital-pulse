@@ -164,3 +164,14 @@
   - *Fix:* Dynamically re-routed the LLM generation target to `gemini-2.5-flash`, capitalizing on the high-speed, free-tier developer limits while maintaining response quality.
 
 
+## Day 7: The Command Center (Streamlit UI)
+- **Goal:** Develop a decoupled, user-friendly frontend to visualize the Medallion Architecture and interact with the AI serving layer.
+- **Outcome:** Engineered a responsive, interactive chat dashboard using Streamlit that securely communicates with the local FastAPI backend via REST.
+- **Actions:**
+    - Established a decoupled client-server architecture, isolating the heavy UI rendering (Streamlit) from the compute-intensive vector search and LLM inference (FastAPI).
+    - Designed a stateful Chat Interface utilizing `st.session_state` to maintain conversational memory and visually render the AI's natural language responses.
+    - Implemented a dynamic "Evidence Expander" that parses the JSON payload from the backend API, allowing end-users to explicitly view the raw Iceberg/Qdrant records used to generate the AI's response (combating AI hallucinations).
+    - Injected custom HTML/CSS via Base64 encoding to override standard library constraints, achieving a custom UI layout and branded aesthetic.
+
+### 🏗️ Architectural Decisions & Key Concepts
+- **Microservice Decoupling:** By explicitly separating the frontend (Streamlit) from the backend (FastAPI/Qdrant), the architecture achieves horizontal scalability. If the web UI experiences heavy user traffic, the Streamlit containers can be scaled independently of the GPU/CPU inference nodes running the RAG pipeline.
