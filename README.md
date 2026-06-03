@@ -19,6 +19,16 @@ graph TD
     classDef gold fill:#ffd700,stroke:#333,stroke-width:2px;
     classDef ai fill:#4285F4,stroke:#333,stroke-width:2px,color:white;
     classDef app fill:#FF4B4B,stroke:#333,stroke-width:2px,color:white;
+    classDef devops fill:#24292e,stroke:#fff,stroke-width:2px,color:white;
+
+    %% DevOps & CI/CD Layer
+    subgraph DevOps [Deployment Architecture]
+        Dev[Git Push to Main] -->|Triggers| CI[GitHub Actions Workflow]
+        CI -->|Automated kubectl apply| K8s{Minikube Kubernetes Cluster}
+    end
+
+    %% Connect Infrastructure to Cluster
+    K8s -.->|Hosts Entire Platform| A
 
     %% Nodes
     A[IoT Telemetry Generator<br>HL7/FHIR Standard] -->|JSON Stream| B(Redpanda / Kafka Broker)
@@ -46,6 +56,8 @@ graph TD
     I:::ai
     G:::app
     H:::app
+    CI:::devops
+    K8s:::devops
 
 ```
 
