@@ -1,5 +1,5 @@
 import os
-import logging # <-- Added for graceful error tracking
+import logging
 from fastapi import FastAPI
 from pydantic import BaseModel
 from qdrant_client import QdrantClient

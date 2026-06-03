@@ -9,7 +9,7 @@ RUN apt-get update && \
 # Install PySpark
 RUN pip install pyspark==3.5.1
 
-# Copy our code into the Container
+# Copy the code into the Container
 WORKDIR /app
 COPY streaming_consumer.py .
 

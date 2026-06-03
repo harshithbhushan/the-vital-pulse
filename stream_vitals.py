@@ -97,7 +97,7 @@ def stream_vitals():
             hr_json = json.dumps(hr_payload)
             spo2_json = json.dumps(spo2_payload)
 
-            # 2. Produce/send the message to Redpanda (Kafka)
+            # 2. Produce OR send the message to Redpanda (Kafka)
             producer.produce(topic_name, key=patient_id, value=hr_json, callback=delivery_report)
             producer.produce(topic_name, key=patient_id, value=spo2_json, callback=delivery_report)
 

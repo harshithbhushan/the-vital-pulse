@@ -1,6 +1,6 @@
 name: Python Quality Gate
 
-# This tells Github to run this check every single time a code is pushed to the main branch, or when a pull request is opened against the main branch.
+
 on:
   push:
     branches: [ "main" ]
@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true" # This is needed to avoid a warning about Node 20 being deprecated in Github Actions. It has no effect on our Python code.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true" 
 
     steps:
     - name: Check out the repository

@@ -16,7 +16,7 @@ def test_anomaly_detection_logic():
         .master("local[*]") \
         .getOrCreate()
     
-    # MUTE THE WINDOWS HADOOP NOISE
+    # TO MUTE THE WINDOWS HADOOP NOISE
     spark.sparkContext.setLogLevel("ERROR")
     
     # 2. Defining the Strict FHIR schema for the Json payloads
