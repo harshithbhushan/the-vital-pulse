@@ -66,27 +66,31 @@ def build_ai_bridge():
     points = []
     
     for idx, row in enumerate(records):
-        # Translating the raw tabular data into a human-readable clinical sentence
-        status = "Tachycardia" if row.loinc_code == "8867-4" else "Hypoxemia"
-        metric_name = "Heart rate" if status == "Tachycardia" else "SpO2"
-        
-        clinical_context = f"Patient anomaly detected: {status}. The patient's {metric_name} was {row.metric_value} at {row.event_time}."
-        
-        # Converting the sentence into a mathematical vector
-        vector = model.encode(clinical_context).tolist()
-        
-        # Package it as a Point for Qdrant (Vector + Original Metadata)
-        points.append(PointStruct(
-            id=idx + 1,
-            vector=vector,
-            payload={
-                "observation_id": row.observation_id,
-                "anomaly_type": status,
-                "metric_value": row.metric_value,
-                "event_time": str(row.event_time),
-                "context": clinical_context
-            }
-        ))
+            # Translating the raw tabular data into a human-readable clinical sentence
+            status = "Tachycardia" if row.loinc_code == "8867-4" else "Hypoxemia"
+            metric_name = "Heart rate" if status == "Tachycardia" else "SpO2"
+            
+            
+            clinical_context = (
+                f"Patient ID: PAT-5542 | Anomaly detected: {status}. "
+                f"Recorded {metric_name} of {row.metric_value} at {row.event_time}."
+            )
+            
+            # Converting the sentence into a mathematical vector
+            vector = model.encode(clinical_context).tolist()
+            
+            # Package it as a Point for Qdrant (Vector + Original Metadata)
+            points.append(PointStruct(
+                id=idx + 1,
+                vector=vector,
+                payload={
+                    "observation_id": row.observation_id,
+                    "anomaly_type": status,
+                    "metric_value": row.metric_value,
+                    "event_time": str(row.event_time),
+                    "context": clinical_context
+                }
+            ))
 
     # Pushing to the Vector Database
     qdrant.upsert(

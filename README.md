@@ -95,7 +95,7 @@ This entire architecture runs on a local, containerized Kubernetes environment.
 
 ```bash
 minikube start
-kubectl apply -f infra/redpanda.yaml
+kubectl apply -f infra/redpanda-broker.yaml
 kubectl apply -f infra/minio.yaml
 kubectl apply -f infra/qdrant.yaml
 
@@ -109,6 +109,40 @@ kubectl port-forward svc/minio 9000:9000 9001:9001
 kubectl port-forward svc/qdrant-service 6333:6333
 
 ```
+
+
+### 🪣 Initializing the Data Lake (First Run Only)
+Because this infrastructure is fully ephemeral, a fresh Kubernetes deployment starts with a blank storage drive. You must initialize the MinIO bucket before starting the PySpark streams.
+
+1. **Access the Storage Console:**
+   ```bash
+   kubectl port-forward svc/minio 9001:9001
+
+   ```
+
+2. **Login to MinIO:**
+Open `http://localhost:9001` in your browser and log in with the local development credentials:
+* **Username:** `admin`
+* **Password:** `password123`
+
+
+3. **Provision the Bucket:**
+Click **Create Bucket** and name it exactly: `vital-pulse-lakehouse`
+
+
+
+### 🌐 Localhost Port Map
+Once the cluster is running and the port-forward commands are executed, you can access the various microservices at the following local endpoints:
+
+* **Streamlit UI (Frontend):** `http://localhost:8501`
+  * *The main command center for medical AI queries.*
+* **FastAPI Swagger Docs (Backend):** `http://localhost:8000/docs`
+  * *Interactive REST API documentation and direct endpoint testing.*
+* **MinIO Console (Data Lake):** `http://localhost:9001`
+  * *Visual access to the Apache Iceberg Parquet files. (Login: admin / password123)*
+* **Qdrant Dashboard (Vector DB):** `http://localhost:6333/dashboard`
+  * *Visual interface to inspect the 384-dimensional clinical vector embeddings.*
+
 
 **3. Ignite the Streaming Pipeline**
 
@@ -131,7 +165,7 @@ python vectorize_anomalies.py
 
 ```bash
 # Terminal E: Start the FastAPI backend
-uvicorn rag_api:app --reload 
+uvicorn rag_api:app --port 8000
 
 # Terminal F: Launch the Streamlit interactive dashboard
 streamlit run dashboard.py 

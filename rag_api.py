@@ -37,7 +37,7 @@ def ask_clinical_assistant(request: QueryRequest):
         search_results = qdrant.query_points(
             collection_name="clinical_anomalies",
             query=query_vector,
-            limit=10
+            limit=15
         ).points
 
         if not search_results:
