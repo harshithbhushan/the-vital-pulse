@@ -37,7 +37,7 @@ def ask_clinical_assistant(request: QueryRequest):
         search_results = qdrant.query_points(
             collection_name="clinical_anomalies",
             query=query_vector,
-            limit=15
+            limit=40
         ).points
 
         if not search_results:
@@ -69,7 +69,7 @@ def ask_clinical_assistant(request: QueryRequest):
 
         # STEP E: Generate the final answer
         response = client.models.generate_content(
-            model='gemini-2.5-flash', # Updated to the standard production model from 'gemini-3-flash-preview'
+            model='gemini-3-flash-preview', # Updated to the standard production model from 'gemini-3-flash-preview'
             contents=prompt
         )
 

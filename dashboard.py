@@ -86,7 +86,7 @@ for message in st.session_state.messages:
                     st.caption(f"{idx + 1}. {source}")
 
 # 4. The Chat Input Bar
-if prompt := st.chat_input("Ask about recent clinical anomalies (e.g., 'What patients had Tachycardia?')..."):
+if prompt := st.chat_input("Ask about the clinical anomalies (e.g., 'Did the patient experience Hypoxemia?')..."):
     
     # Immediately display the user's question on the screen
     st.session_state.messages.append({"role": "user", "content": prompt})

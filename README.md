@@ -114,19 +114,13 @@ kubectl port-forward svc/qdrant-service 6333:6333
 ### 🪣 Initializing the Data Lake (First Run Only)
 Because this infrastructure is fully ephemeral, a fresh Kubernetes deployment starts with a blank storage drive. You must initialize the MinIO bucket before starting the PySpark streams.
 
-1. **Access the Storage Console:**
-   ```bash
-   kubectl port-forward svc/minio 9001:9001
-
-   ```
-
-2. **Login to MinIO:**
+1. **Login to MinIO:**
 Open `http://localhost:9001` in your browser and log in with the local development credentials:
 * **Username:** `admin`
 * **Password:** `password123`
 
 
-3. **Provision the Bucket:**
+2. **Provision the Bucket:**
 Click **Create Bucket** and name it exactly: `vital-pulse-lakehouse`
 
 

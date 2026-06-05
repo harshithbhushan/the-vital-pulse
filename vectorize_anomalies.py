@@ -49,10 +49,14 @@ def build_ai_bridge():
         
     spark.sparkContext.setLogLevel("WARN")
 
-    # Reading the anomalies table
+    # Reading the anomalies table chronologically to preserve the temporal sequence of events for better contextual understanding by the LLM
     try:
-        df = spark.table("lakehouse.medical.critical_vitals_v2")
+        from pyspark.sql.functions import col # Make sure to import 'col'
+        
+        # Add the orderBy clause right here:
+        df = spark.table("lakehouse.medical.critical_vitals_v2").orderBy(col("event_time").asc())
         records = df.collect()
+        
     except Exception as e:
         print(f"❌ Error reading Lakehouse: {e}")
         return
