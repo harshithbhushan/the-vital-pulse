@@ -1,11 +1,11 @@
 import os
 import sys
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json, to_timestamp
+from pyspark.sql.functions import col, from_json, to_timestamp, expr
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
 
 def start_streaming():
-    # 1. Initialize Spark
+    # 1. Initialize Spark 
     print("🧊 Booting Spark with Iceberg and S3 modules...")
     spark = SparkSession.builder \
         .appName("VitalPulse-LakehouseWriter") \
@@ -28,7 +28,7 @@ def start_streaming():
         
     spark.sparkContext.setLogLevel("WARN")
 
-    # 2. Setup the V2 Iceberg Table (No Partitions)
+    # 2. Setup the V2 Iceberg Table 
     print("🏗️ Ensuring Lakehouse schema exists...")
     spark.sql("CREATE NAMESPACE IF NOT EXISTS lakehouse.medical")
     
@@ -41,7 +41,7 @@ def start_streaming():
         ) USING iceberg
     """)
 
-    # 3. Strict FHIR Schema
+    # 3. Strict FHIR Schema WITH DLT Catch
     fhir_schema = StructType([
         StructField("id", StringType(), True),
         StructField("code", StructType([
@@ -52,7 +52,8 @@ def start_streaming():
         StructField("valueQuantity", StructType([
             StructField("value", IntegerType(), True)
         ]), True),
-        StructField("effectiveDateTime", StringType(), True)
+        StructField("effectiveDateTime", StringType(), True),
+        StructField("_corrupt_record", StringType(), True) # ADDED: Catches broken JSON
     ])
 
     print("🔌 Connecting to Redpanda broker at kafka-service:9092...")
@@ -66,8 +67,16 @@ def start_streaming():
         .load()
 
     # 5. Parse the binary Kafka payload
+    # Using 'columnNameOfCorruptRecord' option so Spark knows where to put bad data
     df_parsed = df_raw.selectExpr("CAST(value AS STRING) as json_payload") \
-        .withColumn("parsed", from_json(col("json_payload"), fhir_schema)) \
+        .withColumn("parsed", from_json(col("json_payload"), fhir_schema, {"columnNameOfCorruptRecord": "_corrupt_record"}))
+
+    # ---------------------------------------------------------
+    # NEW DLT ARCHITECTURE: SPLIT THE STREAM
+    # ---------------------------------------------------------
+    
+    # Stream A: Valid Records
+    df_valid = df_parsed.filter(col("parsed._corrupt_record").isNull()) \
         .select(
             col("parsed.id").alias("observation_id"),
             col("parsed.code.coding").getItem(0)["code"].alias("loinc_code"),
@@ -75,16 +84,23 @@ def start_streaming():
             to_timestamp(col("parsed.effectiveDateTime")).alias("event_time")
         )
 
-    # 6. The Quality Gate: Filter for Tachycardia OR Hypoxemia
-    df_anomalies = df_parsed.filter(
+    # Stream B: Corrupt Records (Dead-Letter Topic)
+    df_corrupt = df_parsed.filter(col("parsed._corrupt_record").isNotNull()) \
+        .select(
+            col("parsed._corrupt_record").alias("value"), # Kafka requires payload in 'value' col
+            expr("CAST(current_timestamp() AS STRING) as key")
+        )
+
+    # 6. The Quality Gate: Filter for anomalies on the VALID stream only
+    df_anomalies = df_valid.filter(
         ((col("loinc_code") == "8867-4") & (col("metric_value") >= 110)) |  
         ((col("loinc_code") == "59408-5") & (col("metric_value") <= 89))    
     )
 
-    print("💾 Committing anomalies to Iceberg Lakehouse...")
+    print("💾 Starting streams: Iceberg Lakehouse & Redpanda DLT...")
 
-    # 7. Write Stream directly to Apache Iceberg (V2 Paths)
-    query = df_anomalies.writeStream \
+    # 7. Write Valid Stream to Iceberg
+    query_iceberg = df_anomalies.writeStream \
         .format("iceberg") \
         .outputMode("append") \
         .trigger(processingTime="5 seconds") \
@@ -92,7 +108,15 @@ def start_streaming():
         .option("checkpointLocation", "s3a://vital-pulse-lakehouse/checkpoints/critical_vitals_v2") \
         .start()
 
-    query.awaitTermination()
+    # 8. Write Corrupt Stream back to Redpanda (The Dead-Letter Topic)
+    query_dlt = df_corrupt.writeStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "kafka-service:9092") \
+        .option("topic", "vital-pulse-dlt") \
+        .option("checkpointLocation", "s3a://vital-pulse-lakehouse/checkpoints/vital_pulse_dlt") \
+        .start()
+
+    spark.streams.awaitAnyTermination()
 
 if __name__ == "__main__":
     start_streaming()
