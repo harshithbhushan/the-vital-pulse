@@ -10,7 +10,7 @@ def spark():
     return SparkSession.builder.master("local[1]").appName("VitalPulseTest").getOrCreate()
 
 def test_anomaly_filter_with_explicit_schema(spark):
-    # 1. Enforce the explicit StructType schema (Defending your 40% compute overhead metric)
+    # 1. Enforce the explicit StructType schema 
     schema = StructType([
         StructField("observation_id", StringType(), True),
         StructField("loinc_code", StringType(), True),
@@ -35,7 +35,7 @@ def test_anomaly_filter_with_explicit_schema(spark):
 
     results = anomalies_df.collect()
 
-    # 4. Assert the logic holds true
+    # 4. To assert the logic holds true
     assert len(results) == 2, "Filter failed to drop the normal heart rate record."
     assert results[0].observation_id == "obs-2", "Filter failed to catch Tachycardia."
     assert results[1].observation_id == "obs-3", "Filter failed to catch Hypoxemia."
