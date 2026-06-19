@@ -2,35 +2,46 @@
 VitalPulse Schema Performance Benchmark
 --------------------------------------
 Environment: Databricks Community Edition (Unity Catalog Enabled)
-Purpose: To empirically measure the compute overhead of PySpark's dynamic 
-schema inference versus explicit StructType enforcement when reading nested FHIR JSON.
+Purpose: To empirically measure the compute overhead of PySpark's
+dynamic schema inference versus explicit StructType enforcement
+when reading nested FHIR JSON.
 
 Methodology:
-- Provisions a Unity Catalog Volume to bypass Databricks Serverless /tmp/ restrictions.
+- Provisions a Unity Catalog Volume to bypass /tmp/ restrictions.
 - Generates 200,000 mock FHIR JSON payloads to a static file.
-- Runs 5 alternating trials of read.json() (inferred) vs read.schema().json() (explicit).
-- Evaluates steady-state latency by discarding the first run (JVM Cold Start).
+- Runs 5 alternating trials of read.json() vs read.schema().json().
+- Evaluates steady-state latency by discarding the first JVM Cold Start.
 
 Results (200k records):
 - Steady-state inferred latency: ~1.08s
 - Steady-state explicit latency: ~0.68s
-- Conclusion: Explicit schema enforcement yields a 50-65% reduction in read latency.
+- Conclusion: Explicit schema enforcement yields a 50-65% read latency reduction.
 """
 
 import time
 import os
 from pyspark.sql.functions import col
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, ArrayType
+from pyspark.sql.types import (
+    StructType, StructField, StringType, IntegerType, ArrayType
+)
 
 # Note: In Databricks, 'spark' is pre-instantiated. 
 # Do not run this locally without initializing a SparkSession.
 
 # 1. Create a Unity Catalog volume to hold the test file
-spark.sql("CREATE VOLUME IF NOT EXISTS workspace.default.benchmark_vol")
+# noqa: F821 tells Flake8 to ignore the undefined 'spark' variable
+spark.sql("CREATE VOLUME IF NOT EXISTS workspace.default.benchmark_vol")  # noqa: F821
 volume_path = "/Volumes/workspace/default/benchmark_vol/benchmark_data.json"
 
 print("Generating 200,000 mock FHIR payloads to Unity Catalog Volume...")
-mock_json = '{"id": "obs-101", "code": {"coding": [{"code": "8867-4"}]}, "valueQuantity": {"value": 115}, "effectiveDateTime": "2026-06-17T20:30:00Z"}\n'
+
+# Breaking the long string into a multi-line format to pass Flake8 line length limits
+mock_json = (
+    '{"id": "obs-101", "code": {"coding": [{"code": "8867-4"}]}, '
+    '"valueQuantity": {"value": 115}, '
+    '"effectiveDateTime": "2026-06-17T20:30:00Z"}\n'
+)
+
 with open(volume_path, "w") as f:
     f.write(mock_json * 200000)
 
@@ -48,19 +59,25 @@ explicit_schema = StructType([
     StructField("effectiveDateTime", StringType(), True)
 ])
 
+
 def run_inferred():
     start = time.time()
     # Spark must scan the file to infer the schema before processing
-    df = spark.read.json(volume_path)
-    count = df.filter(col("valueQuantity.value") >= 110).count()
+    df = spark.read.json(volume_path)  # noqa: F821
+    
+    # Assigning to _ to satisfy Flake8 "unused variable" while forcing execution
+    _ = df.filter(col("valueQuantity.value") >= 110).count()
     return time.time() - start
+
 
 def run_explicit():
     start = time.time()
     # Spark uses the provided schema, bypassing the inference scan
-    df = spark.read.schema(explicit_schema).json(volume_path)
-    count = df.filter(col("valueQuantity.value") >= 110).count()
+    df = spark.read.schema(explicit_schema).json(volume_path)  # noqa: F821
+    
+    _ = df.filter(col("valueQuantity.value") >= 110).count()
     return time.time() - start
+
 
 # 3. Execute alternating trials
 print("Executing 5 benchmarking trials...")
@@ -70,14 +87,12 @@ for i in range(5):
     trials_b.append(run_explicit())
 
 # 4. Calculate steady-state averages (excluding JVM cold starts)
-# Note: In production analysis, the first run (cold start) is typically 
-# discarded to find the steady-state micro-batch latency.
 avg_a = sum(trials_a[1:]) / len(trials_a[1:])
 avg_b = sum(trials_b[1:]) / len(trials_b[1:])
 
 print("\n--- BENCHMARK RESULTS ---")
-print(f"Inferred runs (Raw):  {[round(t,4) for t in trials_a]}")
-print(f"Explicit runs (Raw):  {[round(t,4) for t in trials_b]}")
+print(f"Inferred runs (Raw):  {[round(t, 4) for t in trials_a]}")
+print(f"Explicit runs (Raw):  {[round(t, 4) for t in trials_b]}")
 print(f"Steady-State Avg Inferred (Runs 2-5): {avg_a:.4f}s")
 print(f"Steady-State Avg Explicit (Runs 2-5): {avg_b:.4f}s")
 
